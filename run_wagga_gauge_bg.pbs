@@ -1,0 +1,39 @@
+#!/bin/bash
+#PBS -N wagga_gauge_bg
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=06:00:00
+#PBS -l storage=scratch/no50+gdata/no50
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/wagga_gauge_bg.log
+#PBS -r y
+
+# WAGGA gauge-only + log + Bernoulli-Gamma loss (5 layers). Under-prediction fix:
+# separates occurrence (Bernoulli p) from intensity (Gamma mu, trained wet-only),
+# point prediction = p*mu. Watch global r / station-median RMSE vs IDW (0.690/0.522).
+# Submit: qsub run_wagga_gauge_bg.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/experiments"
+
+echo "WAGGA gauge-only 5-fold | log + Bernoulli-Gamma | $(date)"
+
+module load python3/3.11.7
+source /scratch/no50/nk4326/venvs/rainfall/bin/activate
+
+cd "${PROJECT_DIR}"
+
+# Per-job config: enable BG loss (base stays MSE/weighted).
+sed 's/use_bernoulli_gamma: False/use_bernoulli_gamma: True/' \
+    config_wagga_gauge.yaml > config_wagga_gauge_bg.yaml
+
+python3 train.py \
+    --config config_wagga_gauge_bg.yaml \
+    --tag wagga_gauge_log_bg
+
+echo "Finished: $(date)"

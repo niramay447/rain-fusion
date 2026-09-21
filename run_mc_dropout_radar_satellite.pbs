@@ -1,0 +1,68 @@
+#!/bin/bash
+#PBS -N mc_dropout_uq
+#PBS -P no50
+#PBS -q normal
+#PBS -l ncpus=12
+#PBS -l mem=48GB
+#PBS -l walltime=08:00:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0+gdata/rv74
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/mc_dropout_uq.log
+#PBS -r y
+
+# MC-dropout uncertainty analysis (rebuttal comment 1), inference-only, no
+# retraining. Runs all three no-temporal configs (gauge, gauge+radar,
+# gauge+radar+satellite) sequentially against their already-trained
+# checkpoints — the plain (non-_log) experiment dirs, which is what's being
+# reported. Uses the *_nolog configs (log_transform:False, matching how
+# these particular checkpoints were actually trained — they predate the
+# log_transform edit) and requires the corrected 75-station dataset
+# (Waverley Reservoir 566114 restored at its natural row position — station
+# count/order affects the spatial k-fold split) to be synced first.
+#
+# CPU-only (no GPU) is deliberate: PyG's scatter-based message passing is
+# non-deterministic on CUDA (atomic-add float summation order races), which
+# was directly confirmed here — rerunning the identical fold/checkpoint/
+# config on GPU gave coverage_90 = 0.240 then 0.807 on two separate runs,
+# while CPU reproduced bit-identically (0.6383) every time. GPU utilisation
+# for this job was only ~6% anyway, so the walltime cost of dropping GPU
+# should be small.
+# Submit: qsub run_mc_dropout_radar_satellite.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs"
+
+echo "======================================================"
+echo "MC-dropout uncertainty — gauge-only, gauge+radar"
+echo "Node    : $(hostname)"
+echo "Started : $(date)"
+echo "======================================================"
+
+module load pytorch/2.12.0
+source /scratch/no50/nk4326/venvs/radar_sat_v2/bin/activate
+
+echo "Python  : $(which python3)"
+echo "PyTorch : $(python3 -c 'import torch; print(torch.__version__)')"
+echo "CUDA    : $(python3 -c 'import torch; print(torch.cuda.is_available())')"
+
+cd "${PROJECT_DIR}"
+
+echo "--- gauge only ---"
+python3 mc_dropout_uncertainty.py \
+    --config config_gauge_only_notemporal_nolog.yaml \
+    --experiment-dir experiments/20260603_213649_gauge_only_notemporal \
+    --fold all --T 50
+
+echo "--- gauge+radar ---"
+python3 mc_dropout_uncertainty.py \
+    --config config_gauge_radar_notemporal_nolog.yaml \
+    --experiment-dir experiments/20260604_003951_gauge_radar_notemporal \
+    --fold all --T 50
+
+# gauge+radar+satellite is NOT run here — this job already hit its walltime
+# once trying to do all three. It has its own job:
+#   qsub run_mc_dropout_gauge_radar_satellite_only.pbs
+
+echo "Finished: $(date)"

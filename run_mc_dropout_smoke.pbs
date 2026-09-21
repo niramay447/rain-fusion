@@ -1,0 +1,64 @@
+#!/bin/bash
+#PBS -N mc_dropout_smoke
+#PBS -P no50
+#PBS -q normal
+#PBS -l ncpus=12
+#PBS -l mem=48GB
+#PBS -l walltime=00:40:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0+gdata/rv74
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/mc_dropout_smoke.log
+#PBS -r y
+
+# SMOKE TEST — run this BEFORE the two full MC-dropout jobs.
+#
+# The tau^-1 predictive-interval code was only tested locally on the
+# gauge-only config. The fused path (build_fold_assets with
+# return_val_loader=True on a graph that has had radar/satellite layers
+# attached via add_heterodata) is untested end to end. A failure there would
+# only surface ~4h into run_mc_dropout_radar_satellite.pbs, or ~12h into
+# run_mc_dropout_gauge_radar_satellite_only.pbs.
+#
+# This runs fold 0 only with T=3 for both fused configs — enough to exercise
+# the validation-loader construction, the tau^-1 estimate and the predictive
+# interval on fused graphs, in a few minutes. The T=3 numbers are meaningless
+# as results; only "does it run and print a sane tau^-1" matters.
+#
+# Expect: tau^-1 of roughly 0.4-0.9 mm^2 (gauge-only was ~0.6), and a
+# coverage_90_predictive well above coverage_90.
+#
+# NOTE: this writes mc_dropout_f0.csv / mc_dropout_summary_f0.json into the
+# two fused experiment dirs with throwaway T=3 content. The full jobs
+# overwrite them with the real T=50 output, so run the full jobs after.
+#
+# Submit: qsub run_mc_dropout_smoke.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs"
+
+echo "======================================================"
+echo "MC-dropout SMOKE TEST — fused configs, fold 0, T=3"
+echo "Node    : $(hostname)"
+echo "Started : $(date)"
+echo "======================================================"
+
+module load pytorch/2.12.0
+source /scratch/no50/nk4326/venvs/radar_sat_v2/bin/activate
+
+cd "${PROJECT_DIR}"
+
+echo "--- gauge+radar (fold 0, T=3) ---"
+python3 mc_dropout_uncertainty.py \
+    --config config_gauge_radar_notemporal_nolog.yaml \
+    --experiment-dir experiments/20260604_003951_gauge_radar_notemporal \
+    --fold 0 --T 3
+
+echo "--- gauge+radar+satellite (fold 0, T=3) ---"
+python3 mc_dropout_uncertainty.py \
+    --config config_gauge_radar_satellite_notemporal_nolog.yaml \
+    --experiment-dir experiments/20260604_003951_gauge_radar_satellite_notemporal \
+    --fold 0 --T 3
+
+echo "Finished: $(date)"

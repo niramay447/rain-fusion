@@ -1,0 +1,36 @@
+#!/bin/bash
+#PBS -N wagga_radar_tweedie
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/wagga_radar_tweedie.log
+#PBS -r y
+
+# WAGGA gauge+radar + log + Tweedie loss (5 layers, mean-aggr, p=1.6).
+# Submit: qsub run_wagga_radar_tweedie.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/experiments"
+
+echo "WAGGA gauge+radar 5-fold | log + Tweedie (p=1.6) | $(date)"
+
+module load python3/3.11.7
+source /scratch/no50/nk4326/venvs/radar_sat/bin/activate
+
+cd "${PROJECT_DIR}"
+
+sed 's/use_tweedie: False/use_tweedie: True/' \
+    config_wagga_radar.yaml > config_wagga_radar_tweedie.yaml
+
+python3 train.py \
+    --config config_wagga_radar_tweedie.yaml \
+    --tag wagga_radar_log_tweedie
+
+echo "Finished: $(date)"

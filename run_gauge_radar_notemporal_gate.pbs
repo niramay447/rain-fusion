@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -N gr_gate
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/gr_notemporal_gate.log
+#PBS -r y
+
+# SYDNEY gauge+radar, hetero_aggr=gate, first 2 folds (stacking-line point).
+# Submit: qsub run_gauge_radar_notemporal_gate.pbs
+
+set -euo pipefail
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/experiments"
+echo "SYDNEY gauge+radar | gate | 2 folds | $(date)"
+module load python3/3.11.7
+source /scratch/no50/nk4326/venvs/radar_sat/bin/activate
+cd "${PROJECT_DIR}"
+
+python3 train.py \
+    --config config_gauge_radar_notemporal.yaml \
+    --tag gauge_radar_notemporal_gate \
+    --max-folds 2
+
+echo "Finished: $(date)"

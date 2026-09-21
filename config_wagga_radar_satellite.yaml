@@ -1,0 +1,115 @@
+{
+  # WAGGA rural — gauge + radar + satellite, no temporal encoding.
+  dataset_parameters : {
+    database_folder: 'database',
+    log_transform: True,   # log1p rain/accum feature channel before z-score (heavy-tail fix)
+    start_year: 2022,
+    end_year: 2022,
+    rainfall_file: 'database/australia/wagga_rainfall_long.csv',
+    metadata_file: 'database/australia/wagga_station_metadata.csv',
+    cml_file: '',
+    train_size: 0.7,
+    test_size: 0.1,
+    seed: 111,
+    geography_bounds: {
+      left: 146.562,
+      right: 148.599,
+      top: -34.575,
+      bottom: -36.213
+    },
+    cml_folder: '',
+    include_lpe: True,
+    temporal_encoding: {hour: False, month: False},
+
+    # Radar (BOM Rainfields3) — Wagga radar 55
+    radar_site: 'wagga',
+    radar_base_path: '/g/data/rq0/rainfields3',
+    radar_cache_path: 'database/australia/radar_wagga_2022.pkl',
+    radar_id: 55,
+    radar_stride: 10,   # 2704 radar nodes — MUST match radar_wagga_2022.pkl cache,
+                        # which is built at stride 10. (Imbalance was NOT the collapse
+                        # cause; radar is robust at 2704 nodes — see optimization fix.)
+
+    # Satellite (Himawari-8/9 CRRPH v2.1) — Wagga crop
+    satellite_site: 'wagga',
+    satellite_base_path: '/g/data/rv74/satellite-products/arc/der/himawari-ahi/precip/crrph',
+    satellite_cache_path: 'database/australia/satellite_wagga_2022.pkl',
+  },
+
+  visualisation: {
+    compare_metrics: [rmse, pearson_r],
+    rainfall: {
+      vmin: 0,
+      vmax: 15,
+      boundaries: [0, 0.2, 0.5, 1, 2, 4, 7, 10, 15],
+      log_scale: False,
+    },
+    metrics: {
+      rmse:      {vmin: 0.3, vmax: 1.0, boundaries: [0, 0.3, 0.5, 0.7, 0.9, 1.2]},
+      mae:       {vmin: 0.0, vmax: 0.5, boundaries: [0, 0.1, 0.2, 0.3, 0.4, 0.5]},
+      pearson_r: {vmin: 0.4, vmax: 1.0, boundaries: [0, 0.2, 0.4, 0.6, 0.8, 1.0]},
+      f1:        {vmin: 0.0, vmax: 1.0, boundaries: [0, 0.2, 0.4, 0.6, 0.8, 1.0]},
+      bias:      {vmin: -0.5, vmax: 0.5},
+    },
+  },
+
+  country_info: {
+    name: 'Australia',
+    country_bounds: {left: 146.562, right: 148.599, top: -34.575, bottom: -36.213}
+  },
+
+  filters: {
+      uptime_threshold: 0.9
+  },
+
+  training_params: {
+      fold_count: 5,
+      seed: 123,
+      batch_size: 128,
+      epochs: 100,
+      early_stop: 10,
+      weighted_loss_alpha: 0.18,  # matched to gauge/+radar for a fair trio. log_transform
+                                  # (now on) is expected to cure the predict-zero collapse;
+                                  # if +radar+sat still plateaus, raise alpha on ALL three.
+      use_tweedie: False,
+      tweedie_p: 1.6,
+      use_bernoulli_gamma: False,
+  },
+
+  datasources: ['raingauge', 'radar', 'satellite'],
+
+  layer_connect: {
+    gauge_gauge: 5,
+    radar_gauge: 9,
+    satellite_gauge: 10,
+    cml_gauge: 5,
+    is_directed: True
+  },
+
+  model: {
+    hetero_aggr: 'gate',  # learned per-source softmax gating across supports →
+                          # model down-weights the weak satellite automatically
+                          # (sum failed/collapsed; gate is the principled fix).
+    hidden_channels: 32,
+    num_layers: 5,
+    learning_rate: 0.0003,
+    weight_decay: 1e-4,
+    dropout: 0.15,
+  },
+
+  analysis: {
+    time_start: 2022-01-01,
+    time_end:   2022-12-31,
+    rolling_window: 96,
+    selected_station: null,
+    ts_display_start: '2022-06-01',
+    ts_frame_count:   120,
+  },
+
+  temporal_params: {
+    window_size: 4,
+    max_gap_minutes: 10,
+    lstm_hidden: 32,
+    lstm_layers: 1,
+  }
+}

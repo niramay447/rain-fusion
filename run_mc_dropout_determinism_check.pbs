@@ -1,0 +1,54 @@
+#!/bin/bash
+#PBS -N mc_dropout_determinism_check
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=00:30:00
+#PBS -l storage=scratch/no50+gdata/no50
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/mc_dropout_determinism_check.log
+#PBS -r y
+
+# Determinism check: rerun the EXACT same fold/checkpoint/config that gave
+# coverage_90=0.240 in the earlier full run (see
+# experiments/20260603_213649_gauge_only_notemporal/mc_dropout_summary_all_folds.json,
+# fold 4), unchanged, nothing else touched. If this run reports a different
+# coverage_90 for the identical input, that confirms GPU non-determinism in
+# PyG's scatter-based message passing (no torch.use_deterministic_algorithms
+# or cudnn.deterministic set anywhere in this codebase) is corrupting the
+# MC-dropout numbers, rather than a methodology/data bug. A local CPU rerun
+# of this same fold was bit-identical across two separate runs (0.6383 both
+# times), so if THIS also comes back different again, GPU nondeterminism is
+# confirmed as the driver.
+# Submit: qsub run_mc_dropout_determinism_check.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs"
+
+echo "======================================================"
+echo "MC-dropout determinism check — gauge-only, fold 4"
+echo "Node    : $(hostname)"
+echo "Started : $(date)"
+echo "======================================================"
+
+module load pytorch/2.12.0
+source /scratch/no50/nk4326/venvs/radar_sat_v2/bin/activate
+
+echo "Python  : $(which python3)"
+echo "PyTorch : $(python3 -c 'import torch; print(torch.__version__)')"
+echo "CUDA    : $(python3 -c 'import torch; print(torch.cuda.is_available())')"
+echo "GPU     : $(python3 -c 'import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"none\")')"
+
+cd "${PROJECT_DIR}"
+
+echo "--- rerun: gauge only, fold 4 (compare against saved coverage_90=0.240) ---"
+python3 mc_dropout_uncertainty.py \
+    --config config_gauge_only_notemporal_nolog.yaml \
+    --experiment-dir experiments/20260603_213649_gauge_only_notemporal \
+    --fold 4 --T 50
+
+echo "Finished: $(date)"

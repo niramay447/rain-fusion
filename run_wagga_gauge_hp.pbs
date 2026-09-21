@@ -1,0 +1,51 @@
+#!/bin/bash
+#PBS -N wagga_gauge_hp
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=06:00:00
+#PBS -l storage=scratch/no50+gdata/no50
+#PBS -j oe
+#PBS -r y
+
+# WAGGA gauge-only HP tune cell.
+# Fixed: log_transform=True (base), weighted_loss_alpha=0.5, num_layers=5.
+# Swept via qsub -v: LR, HID, DROP.
+# Submit one cell:  qsub -v LR=0.001,HID=64,DROP=0 -o logs/wagga_gauge_hp_lr0.001_h64_d0.log run_wagga_gauge_hp.pbs
+# (or use submit_wagga_hp_grid.sh to fan out the whole grid)
+
+set -euo pipefail
+
+: "${LR:?set LR via -v}"
+: "${HID:?set HID via -v}"
+: "${DROP:?set DROP via -v}"
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/experiments"
+
+SLUG="lr${LR}_h${HID}_d${DROP}"
+echo "WAGGA gauge-only HP | log + alpha=0.5 | ${SLUG} | $(date)"
+
+module load python3/3.11.7
+source /scratch/no50/nk4326/venvs/rainfall/bin/activate
+
+cd "${PROJECT_DIR}"
+
+# Derive a per-cell config: alpha 0.18->0.5, then patch the three HP fields.
+CFG="config_wagga_gauge_hp_${SLUG}.yaml"
+sed -e 's/weighted_loss_alpha: 0.18/weighted_loss_alpha: 0.5/' \
+    -e "s/learning_rate: 0.0003/learning_rate: ${LR}/" \
+    -e "s/hidden_channels: 32/hidden_channels: ${HID}/" \
+    -e "s/dropout: 0.15/dropout: ${DROP}/" \
+    config_wagga_gauge.yaml > "${CFG}"
+
+# Sanity-echo the patched HP block so the log records exactly what ran.
+grep -E "weighted_loss_alpha|learning_rate|hidden_channels|dropout|num_layers" "${CFG}"
+
+python3 train.py \
+    --config "${CFG}" \
+    --tag "wagga_gauge_log_a0.5_${SLUG}"
+
+echo "Finished: $(date)"

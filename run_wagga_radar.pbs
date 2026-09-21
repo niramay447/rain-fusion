@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -N wagga_radar
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/wagga_radar.log
+#PBS -r y
+
+# WAGGA rural — gauge+radar, 5-fold, no temporal. Reuses radar_wagga cache
+# (built by the smoketest). ~2704 radar nodes (stride 10) → slower than Sydney;
+# raise radar_stride to 15 in config_wagga_radar.yaml if it runs long.
+# Submit: qsub run_wagga_radar.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/experiments"
+
+echo "======================================================"
+echo "WAGGA gauge+radar 5-fold"
+echo "Node    : $(hostname)"
+echo "Started : $(date)"
+echo "======================================================"
+
+module load python3/3.11.7
+source /scratch/no50/nk4326/venvs/radar_sat/bin/activate
+
+echo "Python  : $(which python3)"
+echo "PyTorch : $(python3 -c 'import torch; print(torch.__version__)')"
+echo "CUDA    : $(python3 -c 'import torch; print(torch.cuda.is_available())')"
+
+cd "${PROJECT_DIR}"
+
+python3 train.py \
+    --config config_wagga_radar.yaml \
+    --tag wagga_radar_log
+
+echo "Finished: $(date)"

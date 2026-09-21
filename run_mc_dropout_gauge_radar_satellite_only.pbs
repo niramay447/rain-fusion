@@ -1,0 +1,53 @@
+#!/bin/bash
+#PBS -N mc_dropout_grs
+#PBS -P no50
+#PBS -q normal
+#PBS -l ncpus=12
+#PBS -l mem=48GB
+#PBS -l walltime=12:00:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0+gdata/rv74
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/mc_dropout_grs_only.log
+#PBS -r y
+
+# Resume job: run_mc_dropout_radar_satellite.pbs hit its 6h walltime after
+# fully completing gauge-only and gauge+radar (both on CPU, deterministic —
+# see experiments/20260603_213649_gauge_only_notemporal/mc_dropout_summary_all_folds.json
+# and experiments/20260604_003951_gauge_radar_notemporal/mc_dropout_summary_all_folds.json).
+# It was killed right as gauge+radar+satellite started, before fold 0 even
+# began, so that model's mc_dropout_summary_all_folds.json is a stale
+# leftover from the earlier (unreliable, GPU) run — this job overwrites it
+# with a fresh CPU run. CPU-only for the same determinism reason as the
+# other job (GPU scatter non-determinism confirmed earlier: same
+# fold/checkpoint/config gave coverage_90 = 0.240 then 0.807 on two GPU
+# runs, vs bit-identical on CPU). Longer walltime since radar+satellite
+# fusion means a bigger graph (more nodes) than either gauge-only or
+# gauge+radar alone.
+# Submit: qsub run_mc_dropout_gauge_radar_satellite_only.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs"
+
+echo "======================================================"
+echo "MC-dropout uncertainty — gauge+radar+satellite only (resume)"
+echo "Node    : $(hostname)"
+echo "Started : $(date)"
+echo "======================================================"
+
+module load pytorch/2.12.0
+source /scratch/no50/nk4326/venvs/radar_sat_v2/bin/activate
+
+echo "Python  : $(which python3)"
+echo "PyTorch : $(python3 -c 'import torch; print(torch.__version__)')"
+echo "CUDA    : $(python3 -c 'import torch; print(torch.cuda.is_available())')"
+
+cd "${PROJECT_DIR}"
+
+python3 mc_dropout_uncertainty.py \
+    --config config_gauge_radar_satellite_notemporal_nolog.yaml \
+    --experiment-dir experiments/20260604_003951_gauge_radar_satellite_notemporal \
+    --fold all --T 50
+
+echo "Finished: $(date)"

@@ -1,0 +1,45 @@
+#!/bin/bash
+#PBS -N gauge_radar
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=48GB
+#PBS -l walltime=12:00:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/gauge_radar.log
+#PBS -r y
+
+# Gauge+radar 5-fold cross-validation.
+# Singapore hyperparameters (hidden=32, layers=5, lr=0.0003, alpha=0.18, radar_gauge=9).
+# Placeholder until the corrected (deduped) dataset is re-tuned with Optuna.
+# Radar cache loaded from database/australia/radar_2022_preprocessed.pkl if present
+# (delete the stale pkl first so it rebuilds with the start-of-period hour fix).
+# Submit: qsub run_gauge_radar.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/experiments"
+
+echo "======================================================"
+echo "Gauge+radar 5-fold"
+echo "Node    : $(hostname)"
+echo "Started : $(date)"
+echo "======================================================"
+
+module load python3/3.11.7
+source /scratch/no50/nk4326/venvs/radar_sat/bin/activate
+
+echo "Python  : $(which python3)"
+echo "PyTorch : $(python3 -c 'import torch; print(torch.__version__)')"
+echo "CUDA    : $(python3 -c 'import torch; print(torch.cuda.is_available())')"
+
+cd "${PROJECT_DIR}"
+
+python3 train.py \
+    --config config_gauge_radar.yaml \
+    --tag gauge_radar
+
+echo "Finished: $(date)"

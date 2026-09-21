@@ -1,0 +1,36 @@
+#!/bin/bash
+#PBS -N wagga_gauge_inck0.8
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=06:00:00
+#PBS -l storage=scratch/no50+gdata/no50
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/wagga_gauge_inck0.8.log
+#PBS -r y
+
+# WAGGA gauge-only + log + weighted_loss_alpha=0.8 (alpha sweep, on top of log).
+# Submit: qsub run_wagga_gauge_inck0.8.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/experiments"
+
+echo "WAGGA gauge-only 5-fold | log + alpha=0.8 | $(date)"
+
+module load python3/3.11.7
+source /scratch/no50/nk4326/venvs/rainfall/bin/activate
+
+cd "${PROJECT_DIR}"
+
+sed 's/weighted_loss_alpha: 0.18/weighted_loss_alpha: 0.8/' \
+    config_wagga_gauge.yaml > config_wagga_gauge_inck0.8.yaml
+
+python3 train.py \
+    --config config_wagga_gauge_inck0.8.yaml \
+    --tag wagga_gauge_log_inck_0.8
+
+echo "Finished: $(date)"

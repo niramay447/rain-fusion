@@ -1,0 +1,47 @@
+#!/bin/bash
+#PBS -N optuna_full
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0+gdata/rv74
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/optuna_full.log
+#PBS -r y
+
+# Optuna hyperparameter tuning for the full gauge+radar+satellite GNN.
+# Objective : station-median RMSE on fold 3 validation set
+# Trials    : 100  |  Max epochs : 50  |  Early stop : 7
+# Pruner    : MedianPruner(startup=15, warmup=25)
+# Search    : gauge_gauge, radar_gauge, satellite_gauge, is_directed,
+#             hidden_channels, num_layers, lr, weight_decay, dropout,
+#             weighted_loss_alpha
+# Submit: qsub run_optuna_full.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/optuna_results_full"
+
+echo "======================================================"
+echo "Optuna full gauge+radar+satellite tuning"
+echo "Node    : $(hostname)"
+echo "Started : $(date)"
+echo "======================================================"
+
+module load python3/3.11.7
+source /scratch/no50/nk4326/venvs/radar_sat/bin/activate
+
+echo "Python  : $(which python3)"
+echo "PyTorch : $(python3 -c 'import torch; print(torch.__version__)')"
+echo "CUDA    : $(python3 -c 'import torch; print(torch.cuda.is_available())')"
+
+cd "${PROJECT_DIR}"
+
+python3 train_optuna_full.py \
+    --config config_gauge_radar_satellite.yaml \
+    --n-trials 100
+
+echo "Finished: $(date)"

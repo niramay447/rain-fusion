@@ -1,0 +1,44 @@
+#!/bin/bash
+#PBS -N wagga_smoke
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=08:00:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0+gdata/rv74
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/wagga_smoke.log
+#PBS -r y
+
+# WAGGA full-pipeline smoketest: gauge+radar+satellite, 1 fold, 4 epochs.
+# Builds the radar_wagga / satellite_wagga caches from raw /g/data (radar 55,
+# Wagga crop) and confirms non-NaN loss before the long runs.
+# Submit: qsub run_wagga_smoketest.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/experiments"
+
+echo "======================================================"
+echo "WAGGA FULL smoketest — gauge+radar+satellite (1 fold, 4 epochs)"
+echo "Node    : $(hostname)"
+echo "Started : $(date)"
+echo "======================================================"
+
+module load python3/3.11.7
+source /scratch/no50/nk4326/venvs/radar_sat/bin/activate
+
+echo "Python  : $(which python3)"
+echo "PyTorch : $(python3 -c 'import torch; print(torch.__version__)')"
+echo "CUDA    : $(python3 -c 'import torch; print(torch.cuda.is_available())')"
+
+cd "${PROJECT_DIR}"
+
+python3 train.py \
+    --config config_wagga_radar_satellite.yaml \
+    --tag wagga_smoke \
+    --smoketest
+
+echo "Finished: $(date)"

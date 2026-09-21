@@ -1,0 +1,50 @@
+#!/bin/bash
+#PBS -N flood_verify_gr
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=00:30:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/flood_verify_gauge_radar_notemporal.log
+#PBS -r y
+
+# Categorical (POD/FAR/CSI) verification for the gauge+radar no-temporal model.
+# Inference-only against the existing checkpoint in
+# experiments/20260604_003951_gauge_radar_notemporal — no retraining. This is
+# the plain (non-_log) checkpoint, which is what's being reported. Uses
+# config_gauge_radar_notemporal_nolog.yaml (fold_count 5, hetero_aggr
+# default 'mean', log_transform False) to match how that checkpoint was
+# actually trained — the 'gate'/2-fold/log_transform settings in the plain
+# config_gauge_radar_notemporal.yaml belong to later, separate experiments.
+# Requires the corrected 75-station dataset (Waverley Reservoir 566114
+# restored at its natural row position) to be synced first.
+# Submit: qsub run_flood_verification_gauge_radar_notemporal.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs"
+
+echo "======================================================"
+echo "Flood verification — gauge+radar, no-temporal"
+echo "Node    : $(hostname)"
+echo "Started : $(date)"
+echo "======================================================"
+
+module load pytorch/2.12.0
+source /scratch/no50/nk4326/venvs/radar_sat_v2/bin/activate
+
+echo "Python  : $(which python3)"
+echo "PyTorch : $(python3 -c 'import torch; print(torch.__version__)')"
+
+cd "${PROJECT_DIR}"
+
+python3 flood_verification.py \
+    --config config_gauge_radar_notemporal_nolog.yaml \
+    --experiment-dir experiments/20260604_003951_gauge_radar_notemporal \
+    --fold all
+
+echo "Finished: $(date)"

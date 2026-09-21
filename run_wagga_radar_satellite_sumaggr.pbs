@@ -1,0 +1,39 @@
+#!/bin/bash
+#PBS -N wagga_grs_sum
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0+gdata/rv74
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/wagga_radar_satellite_sumaggr.log
+#PBS -r y
+
+# WAGGA gauge+radar+satellite, log + hetero_aggr=sum (collapse fix test).
+# Config already has hetero_aggr: 'sum'. One-variable test vs the mean run:
+# same log + alpha 0.18, only mean→sum. SUCCESS = val breaks below ~0.70.
+# Submit: qsub run_wagga_radar_satellite_sumaggr.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/experiments"
+
+echo "WAGGA gauge+radar+satellite 5-fold | log + aggr=sum | $(date)"
+
+module load python3/3.11.7
+source /scratch/no50/nk4326/venvs/radar_sat/bin/activate
+
+echo "Python  : $(which python3)"
+echo "PyTorch : $(python3 -c 'import torch; print(torch.__version__)')"
+echo "CUDA    : $(python3 -c 'import torch; print(torch.cuda.is_available())')"
+
+cd "${PROJECT_DIR}"
+
+python3 train.py \
+    --config config_wagga_radar_satellite.yaml \
+    --tag wagga_radar_satellite_log_sumaggr
+
+echo "Finished: $(date)"

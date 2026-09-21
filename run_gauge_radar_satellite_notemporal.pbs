@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -N syd_2f_radsat_lat
+#PBS -P no50
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/no50+gdata/no50+gdata/rq0+gdata/rv74
+#PBS -j oe
+#PBS -o /scratch/no50/nk4326/rain-fusion/logs/sydney_2fold_radsat_lat.log
+#PBS -r y
+
+# Gauge+radar+satellite 2-fold, temporal encoding OFF, lat/lon kNN fix applied.
+# Singapore hyperparameters (hidden=32, layers=5, lr=0.0003, alpha=0.18,
+# radar_gauge=9, satellite_gauge=10).
+# Submit: qsub run_gauge_radar_satellite_notemporal.pbs
+
+set -euo pipefail
+
+PROJECT_DIR=/scratch/no50/nk4326/rain-fusion
+mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/experiments"
+
+echo "======================================================"
+echo "Gauge+radar+satellite 2-fold — NO temporal encoding — lat/lon kNN fix"
+echo "Node    : $(hostname)"
+echo "Started : $(date)"
+echo "======================================================"
+
+module load pytorch/2.12.0
+source /scratch/no50/nk4326/venvs/radar_sat_v2/bin/activate
+
+echo "Python  : $(which python3)"
+echo "PyTorch : $(python3 -c 'import torch; print(torch.__version__)')"
+echo "CUDA    : $(python3 -c 'import torch; print(torch.cuda.is_available())')"
+
+cd "${PROJECT_DIR}"
+
+python3 train.py \
+    --config config_gauge_radar_satellite_notemporal.yaml \
+    --tag sydney_2fold_radsat_lat
+
+echo "Finished: $(date)"
